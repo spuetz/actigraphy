@@ -5,7 +5,7 @@ import re
 import pandas as pd
 
 
-def read_agd_files(agd_folder, wear_times):
+def read_agd_files(agd_folder):
 
     agd_files = [os.path.join(agd_folder, file) for file in os.listdir(agd_folder) if
                  file.endswith('.agd')]
@@ -16,11 +16,7 @@ def read_agd_files(agd_folder, wear_times):
     # read agd files
     raw_reader = pyActigraphy.io.read_raw(agd_folder + "/*.agd", reader_type='AGD', n_jobs=3)
 
-    wear_time_groups = wear_times.groupby('subject')
-
-    for reader in raw_reader.readers:
-        wear_time_mask = get_wear_time_mask(reader, wear_time_groups)
-        reader.mask = wear_time_mask
+    return raw_reader
 
 
 def get_wear_time_mask(reader, wear_time_groups):
@@ -89,7 +85,17 @@ if __name__ == '__main__':
     # read program parameters
     args = read_param()
 
+    # read agd files
+    raw_reader = read_agd_files(args.agd_folder)
+
     # read wear times
     wear_times = read_wear_times(args.wear_times_file)
+    wear_time_groups = wear_times.groupby('subject')
 
-    read_agd_files(args.agd_folder, wear_times)
+    # set masks by wear times
+    for reader in raw_reader.readers:
+        wear_time_mask = get_wear_time_mask(reader, wear_time_groups)
+        reader.mask = wear_time_mask
+
+
+
