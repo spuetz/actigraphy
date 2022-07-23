@@ -28,10 +28,6 @@ def parse_header(report_file):
     return subject, header_lines
 
 
-def date_parser(date, time):
-    return datetime.strptime(f"{date} {time}", "%d.%m.%Y %H:%M")
-
-
 def compute_mid_point_of_sleep(row):
     row['MPOS'] = row['Onset'] + timedelta(minutes=row["Total Sleep Time (TST)"] / 2)
     return row
@@ -40,7 +36,7 @@ def compute_mid_point_of_sleep(row):
 def read_data(report_file, header_lines):
     with open(report_file) as report:
         data = pd.read_csv(report, delimiter=',', quotechar='"', decimal=",",
-                           header=header_lines, date_parser=date_parser,
+                           header=header_lines,
                            parse_dates={'In Bed': ['In Bed Date', 'In Bed Time'],
                                         'Out Bed': ['Out Bed Date', 'Out Bed Time'],
                                         'Onset': ['Onset Date', 'Onset Time']})
@@ -61,14 +57,24 @@ def average_time_48(datetimes, pivot=14):
     return time(hour=int(h), minute=int(m), second=0)
 
 
-def compute_time_averages(data):
-    time_names = ['In Bed', 'Onset', 'MPOS', 'Out Bed']
+def compute_time_averages(data, time_names=None, pivot=14):
+    #time_names = ['In Bed', 'Onset', 'MPOS', 'Out Bed']
+
+    from numpy import datetime64
+
+    if time_names is None:
+        time_names = []
+        for column, dtype in dict(data.dtypes).items():
+            print(column, ": ", dtype)
+            if dtype is datetime64:
+                print("hello")
+                time_names.append(column)
 
     time_averages = pd.Series(dtype=float)
 
     for column_name in time_names:
         time_data = data[column_name]
-        time_averages[column_name] = average_time_48(time_data.array)
+        time_averages[column_name] = average_time_48(time_data.array, pivot)
 
     return time_averages
 
@@ -78,15 +84,16 @@ def compute_averages(data):
     normal_data_averages['TBT'] = (datetime.min + timedelta(minutes=normal_data_averages['TBT'])).time()
     normal_data_averages['TST'] = (datetime.min + timedelta(minutes=normal_data_averages['TST'])).time()
 
-    time_data_averages = compute_time_averages(data)
-    averages = normal_data_averages.append(time_data_averages)
+    time_names = ['In Bed', 'Onset', 'MPOS', 'Out Bed']
+    time_data_averages = compute_time_averages(data, time_names)
+    averages = pd.concat([normal_data_averages, time_data_averages])
     return averages
 
 
 def compute_averages_for_all_reports(reports_files):
-    average_all = pd.DataFrame()  # averages over all days
-    average_we = pd.DataFrame()  # averages over weekend days
-    average_wd = pd.DataFrame()  # averages over weekday days
+    average_all_list = []  # data list all days
+    average_we_list = []  # data list weekend days
+    average_wd_list = []  # data list weekday days
 
     for report_file in reports_files:
         subject, header_lines = parse_header(report_file)
@@ -111,7 +118,7 @@ def compute_averages_for_all_reports(reports_files):
 
         # compute filter for out bed in the week and not at the weekend
         weekday = data['Out Bed'].dt.weekday
-        in_week = ((weekday > 1) & (weekday < 7))
+        in_week = (weekday < 5)  # 0 = Monday, 5 = Saturday
 
         # compute averages for weekday and weekends separately
         averages_weekday = compute_averages(data[in_week])
@@ -123,9 +130,13 @@ def compute_averages_for_all_reports(reports_files):
         averages["Subject"] = subject
 
         # append result for this subject
-        average_we = average_we.append(averages_weekend, ignore_index=True)
-        average_wd = average_wd.append(averages_weekday, ignore_index=True)
-        average_all = average_all.append(averages, ignore_index=True)
+        average_we_list.append(averages_weekend)
+        average_wd_list.append(averages_weekday)
+        average_all_list.append(averages)
+
+    average_all = pd.DataFrame(average_all_list)  # averages over all days
+    average_we = pd.DataFrame(average_we_list)  # averages over weekend days
+    average_wd = pd.DataFrame(average_wd_list)  # averages over weekday days
 
     # use integers for the subjects
     average_we['Subject'] = average_we['Subject'].astype(int)
