@@ -42,4 +42,11 @@ python3 read_reports.py -o output_test3.xlsx -s /search/path/to/folder/with/sub/
 
 ```
 
+Sample usage of "actigraphy_batch.py"
 
+```
+python3 actigraphy_batch.py -s /search/path/to/folder/with/subfolders-xyz/ --subject-filename-pattern ".*/subfolders-xyz/(.*?)/.*"
+
+python3 actigraphy_batch.py -a data/agd_files/ -w data/wear_time_validation.csv
+
+```
