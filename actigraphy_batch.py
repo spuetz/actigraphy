@@ -5,82 +5,104 @@ import re
 import pandas as pd
 
 
-def read_agd_files(agd_folder):
+# Print iterations progress
+def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+    # Print New Line on Complete
+    if iteration == total:
+        print()
 
-    agd_files = [os.path.join(agd_folder, file) for file in os.listdir(agd_folder) if
-                 file.endswith('.agd')]
 
-    # try to sort files by number in the name
-    agd_files.sort(key=lambda name: int(re.search(r"\d+", name).group()))
+def get_name_from_fname_pattern(fname_pattern, path):
+    try:
+        return re.match(fname_pattern, path).group(1)
+    except:
+        return None
 
-    # read agd files
-    raw_reader = pyActigraphy.io.read_raw(agd_folder + "/*.agd", reader_type='AGD', n_jobs=3)
 
-    return raw_reader
+def read_agd_files(agds, fname_pattern=None):
+    from joblib import delayed, Parallel
+    import glob
+
+    agd_files = glob.glob(agds+"/*.agd") if type(agds) is str and os.path.isdir(agds) else agds
+
+    def read_agd(fname, fname_pattern=None):
+        raw_agd = pyActigraphy.io.agd.RawAGD(fname)
+        if fname_pattern:
+            name = get_name_from_fname_pattern(fname_pattern, fname)
+            raw_agd.display_name = name
+        return raw_agd
+
+    def parallel_reader(n_jobs, file_list, prefer=None, verbose=0, **kwargs):
+        return Parallel(n_jobs=n_jobs, prefer=prefer, verbose=verbose)(
+            delayed(read_agd)(file, **kwargs) for file in file_list
+        )
+
+    readers = parallel_reader(4, agd_files, fname_pattern=fname_pattern)
+    return pyActigraphy.io.RawReader("AGD", readers)
 
 
 def get_wear_time_mask(reader, wear_time_groups):
-    wear_times = wear_time_groups.get_group(int(reader.name))
-    mask = pd.Series(0, index=reader.data.index)
-    for index, wear_time in wear_times.iterrows():
-        mask.loc[(mask.index >= wear_time.start) & (mask.index <= wear_time.stop)] = 1
+    if wear_time_groups and reader.display_name in wear_time_groups.groups:
+        wear_times = wear_time_groups.get_group(reader.display_name)
+        mask = pd.Series(0, index=reader.data.index)
+        for index, wear_time in wear_times.iterrows():
+            mask.loc[(mask.index >= wear_time.start) & (mask.index <= wear_time.stop)] = 1
 
-    return mask
+        return mask
+    else:
+        return None
 
 
-def read_wear_times(wear_time_file):
+def read_wear_times(wear_time_files, fname_pattern=None):
     fields = ["Subject", "Wear Time Start", "Wear Time End"]
 
-    with open(wear_time_file) as report:
+    files = [wear_time_files] if type(wear_time_files) is str else wear_time_files
 
-        data = pd.read_csv(report, delimiter=',', quotechar='"', decimal=",",
-                           date_parser=lambda dt: datetime.strptime(dt, "%d.%m.%Y %H:%M:%S"),
-                           parse_dates=["Wear Time Start", "Wear Time End"])
+    all_data = pd.DataFrame()
 
-        data = data[fields]
+    for file in files:
 
-        data.rename(columns={
-            "Subject": "subject",
-            "Wear Time Start": "start",
-            "Wear Time End": "stop",
-        }, inplace=True)
+        with open(file) as report:
+            data = pd.read_csv(report, delimiter=',', quotechar='"', decimal=",",
+                               date_parser=lambda dt: datetime.strptime(dt, "%d.%m.%Y %H:%M:%S"),
+                               parse_dates=["Wear Time Start", "Wear Time End"])
 
-        data.subject = data.subject.astype(int)
-        data.sort_values(by=['subject'], inplace=True)
+            data = data[fields]
 
-        return data
+            data.rename(columns={
+                "Subject": "subject",
+                "Wear Time Start": "start",
+                "Wear Time End": "stop",
+            }, inplace=True)
 
+            if fname_pattern:
+                data.subject = get_name_from_fname_pattern(fname_pattern, file)
 
-def read_param():
-    import sys
-    import argparse
-    parser = argparse.ArgumentParser()
+            all_data = pd.concat([all_data, data], ignore_index=True)
 
-    parser.add_argument('-a', '--agd-folder', dest="agd_folder", help='Folder containing all agd files',
-                        default="./data/agd_files")
-    parser.add_argument('-w', '--wear_times_file', dest="wear_times_file",
-                        help='The wear time validation details file.',
-                        default="./data/wear_time_validation.csv")
+    all_data['subject'] = all_data['subject'].astype(str)
+    all_data.sort_values(by=['subject'], inplace=True)
 
-    args = parser.parse_args(sys.argv[1:])
-
-    wrong_param = False
-    if not os.path.exists(args.agd_folder):
-        print('agd folder "{}" does not exist!'.format(args.agd_folder))
-        wrong_param = True
-
-    if not os.path.exists(args.wear_times_file):
-        print('wear time validation details file "{}" does not exist!'.format(args.wear_times_file))
-        wrong_param = True
-
-    if wrong_param:
-        parser.print_help()
-        exit()
-
-    return args
+    return all_data
 
 
-def summary(reader):
+def summary(reader, mask_set=False):
     from pyActigraphy.metrics.metrics import _lmx as lmx
 
     L5_start, L5 = lmx(reader.binarized_data(4), '5H', lowest=True)
@@ -90,9 +112,9 @@ def summary(reader):
     M10_midpoint = datetime(2021, 1, 1) + timedelta(hours=5) + M10_start
 
     data = {
-        'subject': int(reader.name),
+        'subject': reader.display_name,
         'Start_time': reader.start_time,
-        'Mask_fraction': reader.mask_fraction(),
+        'Mask_fraction': reader.mask_fraction() if mask_set else 0,
         'Duration': reader.duration(),
         'ADAT': reader.ADAT(),
         'L5': L5,
@@ -108,32 +130,42 @@ def summary(reader):
     return data
 
 
-if __name__ == '__main__':
-
-    # read program parameters
-    args = read_param()
+def compute_summary_and_averages(agds, wear_times_files=None, fname_pattern=None):
 
     # read agd files
-    raw_reader = read_agd_files(args.agd_folder)
+    raw_reader = read_agd_files(agds, fname_pattern)
 
     # read wear times
-    wear_times = read_wear_times(args.wear_times_file)
-    wear_time_groups = wear_times.groupby('subject')
+    if wear_times_files:
+        print("read wear times...")
+        wear_times = read_wear_times(wear_times_files, fname_pattern)
+        print(wear_times)
+        wear_time_groups = wear_times.groupby('subject')
 
     # set masks by wear times
     summaries = []
 
-    for reader in raw_reader.readers:
-        print("processing subject {}.".format(int(reader.name)))
-        wear_time_mask = get_wear_time_mask(reader, wear_time_groups)
-        reader.mask = wear_time_mask
-        reader.mask_inactivity = True
-        summaries.append(summary(reader))
+    for i, reader in enumerate(raw_reader.readers):
+
+        printProgressBar(i + 1, len(raw_reader.readers), prefix='Progress:', suffix='Complete', length=50)
+        # print("processing subject {}.".format(int(reader.name)))
+
+        wear_time_mask = get_wear_time_mask(reader, wear_time_groups) if wear_times_files else None
+
+        if wear_time_mask is not None:
+            reader.mask = wear_time_mask
+            reader.mask_inactivity = True
+        summaries.append(summary(reader, wear_time_mask is not None))
+        i += 1
 
     data = pd.DataFrame(summaries)
 
     data.set_index("subject", inplace=True)
-    data.index = data.index.astype(int)
+    try:
+        data.index = data.index.astype(int)
+    except TypeError:
+        pass
+
     data.sort_index(inplace=True)
 
     from read_reports import compute_time_averages
@@ -142,6 +174,70 @@ if __name__ == '__main__':
     normal_data_averages = data.mean(numeric_only=True)
     time_data_averages = compute_time_averages(data, time_names, pivot=5)
     averages = pd.concat([normal_data_averages, time_data_averages])
+
+    return data, averages
+
+
+if __name__ == '__main__':
+
+    import sys
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    two_options = parser.add_mutually_exclusive_group(required=True)
+
+    two_options.add_argument('-a', '--agd-folder', dest="agd_folder", help='Folder containing all agd files',
+                             default="./data/agd_files")
+    parser.add_argument('-w', '--wear_times_file', dest="wear_times_file",
+                        help='The wear time validation details file.')
+
+    two_options.add_argument('-s', '--search-folder', dest="search_folder",
+                             help='Folder containing sub-folders for each subject')
+    parser.add_argument('--subject-filename-pattern', dest="subject_filename_pattern",
+                        help='If set, the the subject name will be taken from the file name following this regex pattern')
+
+
+    args = parser.parse_args(sys.argv[1:])
+
+    subject_filename_pattern = re.compile(args.subject_filename_pattern) if args.subject_filename_pattern else None
+    if subject_filename_pattern:
+        print(f"Use subject filename pattern: {subject_filename_pattern}")
+
+
+    data = None
+    averages = None
+
+    if args.search_folder:
+        import crawl_files
+
+        groups_map = crawl_files.search_folder(args.search_folder)
+
+        agd_files = [item['agd_file'] for key, item in groups_map.items() if item['agd_file']]
+        wear_files = [item['wear_time'] for key, item in groups_map.items() if item['wear_time']]
+
+        print(wear_files)
+
+        print(f'Found {len(agd_files)} agd files in {args.search_folder}')
+        agd_files.sort()
+        data, averages = compute_summary_and_averages(agd_files, wear_times_files=wear_files, fname_pattern=subject_filename_pattern)
+
+    else:
+        wrong_param = False
+
+        if not os.path.exists(args.agd_folder):
+            print(f'agd folder {args.ags_folder} does not exist!')
+            wrong_param = True
+
+        if args.wear_times_file and not os.path.exists(args.wear_times_file):
+            print(f'wear time validation details file {args.wear_times_file} does not exist!')
+            wrong_param = True
+
+        if wrong_param:
+            parser.print_help()
+            exit()
+
+        data, averages = compute_summary_and_averages(args.agd_folder, args.wear_times_file)
 
     print("Averages")
     print(averages)
@@ -162,7 +258,4 @@ if __name__ == '__main__':
     # write actigraphy summary data to excel
     data.to_excel("actigraphy_summary.xlsx")
 
-
-    #print(data)
-
-
+    print(data)
