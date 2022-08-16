@@ -3,7 +3,7 @@ import pyActigraphy
 import os
 import re
 import pandas as pd
-
+from pandas.io.sql import DatabaseError
 
 # Print iterations progress
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
@@ -49,9 +49,14 @@ def read_agd_files(agds, fname_pattern=None):
         return raw_agd
 
     def parallel_reader(n_jobs, file_list, prefer=None, verbose=0, **kwargs):
-        return Parallel(n_jobs=n_jobs, prefer=prefer, verbose=verbose)(
-            delayed(read_agd)(file, **kwargs) for file in file_list
-        )
+        try:
+            reader = Parallel(n_jobs=n_jobs, prefer=prefer, verbose=verbose)(
+                delayed(read_agd)(file, **kwargs) for file in file_list
+            )
+            return reader
+
+        except DatabaseError:
+            return None
 
     readers = parallel_reader(4, agd_files, fname_pattern=fname_pattern)
     return pyActigraphy.io.RawReader("AGD", readers)
@@ -147,6 +152,8 @@ def compute_summary_and_averages(agds, wear_times_files=None, fname_pattern=None
 
     for i, reader in enumerate(raw_reader.readers):
 
+        if reader is None:
+            continue
         printProgressBar(i + 1, len(raw_reader.readers), prefix='Progress:', suffix='Complete', length=50)
         # print("processing subject {}.".format(int(reader.name)))
 
