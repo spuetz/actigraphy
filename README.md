@@ -32,6 +32,10 @@ With `ls` you should see the actigraphy scripts.
 ### Install dependencies
 
 try to use `pip`. Type `pip -V`. This will print out the version of pip installed on your computer. Make sure that you have python3 installed on your computer.
+Upgrade pip to the newest version with the following line. This can take a while.
+```
+python3 -m pip install --upgrade pip
+```
 
 For our system we will need a virtual python environment. For this we now need to install the correspodning python package and follow the next steps described here.
 
@@ -41,7 +45,7 @@ python3 -m venv env
 source env/bin/activate
 ```
 
-You are now in a virtual environment. With the following line you will install all requirements which are listed in the requirements.txt. 
+You are now in a virtual environment. With the following line you will install all requirements which are listed in the requirements.txt. Installing the requirements can take a while. Go make yourself a nice cup of coffee!
 
 ```
 pip install -r requirements.txt
