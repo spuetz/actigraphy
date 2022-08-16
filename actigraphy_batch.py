@@ -58,6 +58,7 @@ def read_agd_files(agds, fname_pattern=None):
         )
 
     readers = parallel_reader(4, agd_files, fname_pattern=fname_pattern)
+    readers = [reader for reader in readers if reader is not None]
     return pyActigraphy.io.RawReader("AGD", readers)
 
 
