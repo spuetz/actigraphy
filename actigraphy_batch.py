@@ -255,7 +255,7 @@ if __name__ == '__main__':
 
     # write averages to excel and csv
     averages.to_excel("actigraphy_summary_averages.xlsx")
-    averages.to_csv("actigraphy_summery_averages.csv")
+    averages.to_csv("actigraphy_summary_averages.csv")
 
     # write actigraphy summary data to html
     data_html = data.to_html()
