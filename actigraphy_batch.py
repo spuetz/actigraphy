@@ -42,21 +42,20 @@ def read_agd_files(agds, fname_pattern=None):
     agd_files = glob.glob(agds+"/*.agd") if type(agds) is str and os.path.isdir(agds) else agds
 
     def read_agd(fname, fname_pattern=None):
-        raw_agd = pyActigraphy.io.agd.RawAGD(fname)
+        try:
+            raw_agd = pyActigraphy.io.agd.RawAGD(fname)
+        except DatabaseError:
+            return None
+
         if fname_pattern:
             name = get_name_from_fname_pattern(fname_pattern, fname)
             raw_agd.display_name = name
         return raw_agd
 
     def parallel_reader(n_jobs, file_list, prefer=None, verbose=0, **kwargs):
-        try:
-            reader = Parallel(n_jobs=n_jobs, prefer=prefer, verbose=verbose)(
-                delayed(read_agd)(file, **kwargs) for file in file_list
-            )
-            return reader
-
-        except DatabaseError:
-            return None
+        return Parallel(n_jobs=n_jobs, prefer=prefer, verbose=verbose)(
+            delayed(read_agd)(file, **kwargs) for file in file_list
+        )
 
     readers = parallel_reader(4, agd_files, fname_pattern=fname_pattern)
     return pyActigraphy.io.RawReader("AGD", readers)
