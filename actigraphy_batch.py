@@ -45,6 +45,7 @@ def read_agd_files(agds, fname_pattern=None):
         try:
             raw_agd = pyActigraphy.io.agd.RawAGD(fname)
         except DatabaseError:
+            print(f"Could not read in agd file {fname}. File is defective!")
             return None
 
         if fname_pattern:
@@ -162,7 +163,10 @@ def compute_summary_and_averages(agds, wear_times_files=None, fname_pattern=None
         if wear_time_mask is not None:
             reader.mask = wear_time_mask
             reader.mask_inactivity = True
-        summaries.append(summary(reader, wear_time_mask is not None))
+        try:
+            summaries.append(summary(reader, wear_time_mask is not None))
+        except ValueError:
+            print(f"Could not process subject {reader.display_name}, the agd file data incorrect!")
         i += 1
 
     data = pd.DataFrame(summaries)
