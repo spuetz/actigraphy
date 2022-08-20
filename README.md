@@ -76,11 +76,26 @@ Usually the following values are computed:
  - MPOS (Mid Point Of Sleep Time)
  - Out Bed (Out Bed Time)
 
-To list the parametres and print the usage of the script, type `read_reports.py -h`. 
-The script searches either in a folder for csv files (-r parameter).
-The script assumes that all CSV files in the folder are sleep reports, if this is not the case, the script crashes.
-There is also the possibility to search for report files in subfolders with the search parameter (-s).
-The script assumes that each subfolder of the folder specified with -s is for a subject containing exactly one report.
+
+There are two scripts. One script (read_reports.py) reads the report csv files and calculates the mean values of all values that are in the CSV file and additional values like the sleep midpoint.
+The other script (actigraphy_batch.py) reads the AGD files and the sleep validatoin files and calculates values like L5 and M10 and the mean values of them. Both scripts also calculate correct averages of the times and durations.
+In addition, both scripts have two modes how to find the input files, i.e. the CSV files.
+Generally the parameters of the scripts can be displayed by using the flag `-h` (for help), e.g. `python3 read_reports.py -h`.
+
+
+The script searches either in a folder for csv files (parameter `-r`), so a valid call would be e.g. `python3 read_reports.py -r data/reports/`, where after the -r the path to the folder where the reports are located is given.
+In the terminal you can also get the path by dragging and dropping the folder into the terminal. It is important that the cursor in the terminal is at the place where the path should be inserted, in our example above behind the `-r`.
+That means you have already typed `python3 read_reports.py -r` in the terminal and then drag and drop the folder from the Finder into the terminal.
+With the `-r` parameter the sktip assumes that all report files are in the same folder, exactly the one you specify after the parameter.
+With the `-o` parameter you can specify the output file, or better the path. So where the result should be written to. 
+A complete possible call of the script would be `python3 read_reports.py -r data/reports/ -o output_test1.xlsx`.
+So the result will be written to `output_test1.xlsx`.
+
+There is also the possibility to search for report files in subfolders with the parameter `-s` (for search).
+The script assumes that each subfolder of the folder specified with -s stands for a subject containing exactly one report.
+A possible call would then be, for example, `python3 read_reports.py -o output_test2.xlsx -s /search/path/to/folder/with/sub/folders/`.
+So it would search the subfolders in the `/search/path/to/folder/with/sub/folders/` folder for report file.
+
 
 Example usages of the `read_reports.py` script:
 
