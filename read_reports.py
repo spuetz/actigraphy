@@ -61,7 +61,7 @@ def read_data(report_file, header_lines, charenc):
 
 
 def average_time_48(datetimes, pivot=14):
-    times = [dt.time() for dt in datetimes]
+    times = [dt.time() if type(dt) is datetime else dt for dt in datetimes]
     minutes = sum(
         (int(t.minute) + int(t.hour) * 60) if t.hour > pivot else (int(t.minute) + int(t.hour + 24) * 60) for t in
         times)
@@ -82,15 +82,15 @@ def compute_time_averages(data, time_names=None, pivot=14):
         for column, dtype in dict(data.dtypes).items():
             print(column, ": ", dtype)
             if dtype is datetime64:
-                print("hello")
                 time_names.append(column)
 
-    time_averages = pd.Series(dtype=float)
+    time_averages = pd.Series()
 
     for column_name in time_names:
         time_data = data[column_name]
         time_averages[column_name] = average_time_48(time_data.array, pivot)
 
+    print("averages", time_averages)
     return time_averages
 
 

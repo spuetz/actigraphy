@@ -113,10 +113,10 @@ def summary(reader, mask_set=False):
     from pyActigraphy.metrics.metrics import _lmx as lmx
 
     L5_start, L5 = lmx(reader.binarized_data(4), '5H', lowest=True)
-    L5_midpoint = datetime(2021, 1, 1) + timedelta(hours=2.5) + L5_start
+    L5_midpoint = (datetime(2021, 1, 1) + timedelta(hours=2.5) + L5_start).time()
 
     M10_start, M10 = lmx(reader.binarized_data(4), '10H', lowest=False)
-    M10_midpoint = datetime(2021, 1, 1) + timedelta(hours=5) + M10_start
+    M10_midpoint = (datetime(2021, 1, 1) + timedelta(hours=5) + M10_start).time()
 
     data = {
         'subject': reader.display_name,
