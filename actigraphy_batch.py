@@ -5,6 +5,7 @@ import re
 import pandas as pd
 from pandas.io.sql import DatabaseError
 
+
 # Print iterations progress
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
     """
@@ -39,7 +40,7 @@ def read_agd_files(agds, fname_pattern=None):
     from joblib import delayed, Parallel
     import glob
 
-    agd_files = glob.glob(agds+"/*.agd") if type(agds) is str and os.path.isdir(agds) else agds
+    agd_files = glob.glob(agds + "/*.agd") if type(agds) is str and os.path.isdir(agds) else agds
 
     def read_agd(fname, fname_pattern=None):
         try:
@@ -137,7 +138,6 @@ def summary(reader, mask_set=False):
 
 
 def compute_summary_and_averages(agds, wear_times_files=None, fname_pattern=None):
-
     # read agd files
     raw_reader = read_agd_files(agds, fname_pattern)
 
@@ -208,13 +208,10 @@ if __name__ == '__main__':
     parser.add_argument('--subject-filename-pattern', dest="subject_filename_pattern",
                         help='If set, the the subject name will be taken from the file name following this regex pattern')
 
+    parser.add_argument('-o', '--reports-output', dest="reports_output", required=True,
+                        help='File for storing the resulting average computations')
 
     args = parser.parse_args(sys.argv[1:])
-
-    subject_filename_pattern = re.compile(args.subject_filename_pattern) if args.subject_filename_pattern else None
-    if subject_filename_pattern:
-        print(f"Use subject filename pattern: {subject_filename_pattern}")
-
 
     data = None
     averages = None
@@ -222,16 +219,22 @@ if __name__ == '__main__':
     if args.search_folder:
         import crawl_files
 
+        subfolder = args.search_folder.split("/")[-1]
+        subject_filename_pattern = re.compile(
+        args.subject_filename_pattern if args.subject_filename_pattern else f".*/{subfolder}/(.*?)/.*")
+        print(subject_filename_pattern)
+
         groups_map = crawl_files.search_folder(args.search_folder)
 
         agd_files = [item['agd_file'] for key, item in groups_map.items() if item['agd_file']]
         wear_files = [item['wear_time'] for key, item in groups_map.items() if item['wear_time']]
 
-        print(wear_files)
+        #print(wear_files)
 
         print(f'Found {len(agd_files)} agd files in {args.search_folder}')
         agd_files.sort()
-        data, averages = compute_summary_and_averages(agd_files, wear_times_files=wear_files, fname_pattern=subject_filename_pattern)
+        data, averages = compute_summary_and_averages(agd_files, wear_times_files=wear_files,
+                                                      fname_pattern=subject_filename_pattern)
 
     else:
         wrong_param = False
@@ -253,20 +256,23 @@ if __name__ == '__main__':
     print("Averages")
     print(averages)
 
+    from pathlib import Path
+    filepath = Path(args.reports_output)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
     # write averages to excel and csv
-    averages.to_excel("actigraphy_summary_averages.xlsx")
-    averages.to_csv("actigraphy_summary_averages.csv")
+    averages.to_excel(f"{args.reports_output}_averages.xlsx")
+    averages.to_csv(f"{args.reports_output}_averages.csv")
 
     # write actigraphy summary data to html
     data_html = data.to_html()
-    data_html_file = open("actigraphy_summary.html", "w")
+    data_html_file = open(f"{args.reports_output}.html", "w")
     data_html_file.write(data_html)
     data_html_file.close()
 
     # write actigraphy summary data to csv
-    data.to_csv("actigraphy_summary.csv")
+    data.to_csv(f"{args.reports_output}.csv")
 
     # write actigraphy summary data to excel
-    data.to_excel("actigraphy_summary.xlsx")
+    data.to_excel(f"{args.reports_output}.xlsx")
 
     print(data)
