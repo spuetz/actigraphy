@@ -157,9 +157,7 @@ def compute_averages_for_all_reports(reports_files, output, subject_filename_pat
         meta_data["# Nights"] = num_nights = len(data.index)
 
         if num_sleeps is not len(data.index):
-            print(f"{subject} has more sleeps in same nights, combined from {num_sleeps} sleeps to {num_nights} nights.")
-
-
+            print(f"{subject} has more sleep periods in same nights, combined from {num_sleeps} sleeps to {num_nights} nights.")
 
         # compute mid point of sleep
         data = data.apply(compute_mid_point_of_sleep, axis=1)
@@ -216,9 +214,20 @@ def compute_averages_for_all_reports(reports_files, output, subject_filename_pat
 
     average_data = meta_data.join(average_all).join(average_wd).join(average_we).sort_index(axis=1)
 
-    average_data.to_excel(output)
-    print(average_data)
+    from pathlib import Path
+    filepath = Path(args.reports_output)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
 
+    average_data.to_excel(f"{args.reports_output}.xlsx")
+    average_data.to_csv(f"{args.reports_output}.csv")
+
+    # write data to html
+    data_html = average_data.to_html()
+    data_html_file = open(f"{args.reports_output}.html", "w")
+    data_html_file.write(data_html)
+    data_html_file.close()
+
+    print(average_data)
 
 
 if __name__ == '__main__':
@@ -236,21 +245,18 @@ if __name__ == '__main__':
 
     parser.add_argument('-o', '--reports-output', dest="reports_output", required=True,
                         help='File for storing the resulting average computation of all reports')
-    parser.add_argument('--subject-filename-pattern', dest="subject_filename_pattern",
+    parser.add_argument('--subject-filename-pattern', dest="subject_filename_pattern", default="(.*)-sleep-report*",
                         help='If set, the the subject name will be taken from the file name following this regex pattern')
 
     args = parser.parse_args(sys.argv[1:])
 
     subject_filename_pattern = re.compile(args.subject_filename_pattern) if args.subject_filename_pattern else None
-    if subject_filename_pattern:
-        print(f"Use subject filename pattern: {subject_filename_pattern}")
 
     if args.search_folder:
         import crawl_files
         groups_map = crawl_files.search_folder(args.search_folder)
 
         reports_files = [item['sleep_report'] for key, item in groups_map.items() if item['sleep_report']]
-        print(reports_files)
         print(f'Found {len(reports_files)} report files in {args.search_folder}')
         reports_files.sort()
         compute_averages_for_all_reports(reports_files, args.reports_output, subject_filename_pattern)
@@ -264,4 +270,4 @@ if __name__ == '__main__':
         reports_files = [os.path.join(args.reports_folder, file) for file in os.listdir(args.reports_folder) if file.endswith('.csv')]
         print(f'Found {len(reports_files)} report files in {args.reports_folder}')
         reports_files.sort()
-        compute_averages_for_all_reports(reports_files, args.reports_output, subject_filename_pattern)
+        compute_averages_for_all_reports(reports_files, args.reports_output, None)
